@@ -249,7 +249,7 @@ def configure_s3a(client, dns_name, access_key, secret_key, bucket_name, testdir
 
 <property>
 <name>fs.contract.test.fs.s3a</name>
-<value>${bucket_name}</value>
+<value>s3a://{bucket_name}/</value>
 </property>
 
 <property>

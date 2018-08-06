@@ -76,6 +76,12 @@ def glob(dir_name, pattern):
                 paths.append(re.sub('\/+', '/', dir_name + '/' + i.d_name.decode('utf-8')))
     return paths
 
+def locate_file(name, case_sensitive=True):
+    if not case_sensitive:
+        return [i for i in sorted(set(dirwalk(cephfs.getcwd().decode('utf-8')))) if name.lower() in i.lower()]
+    else:
+        return [i for i in sorted(set(dirwalk(cephfs.getcwd().decode('utf-8')))) if name in i]
+
 def get_all_possible_paths(pattern):
     paths = []
     dir_ = cephfs.getcwd()
@@ -361,7 +367,7 @@ class CephFSShell(Cmd):
                 dst_dir = src_dir.replace(root_src_dir, root_dst_dir, 1)
                 if not args.force and dst_dir != '/':
                     cephfs.mkdirs(to_bytes(dst_dir), 0o777)
-                elif args.force and dst_dir != '/' and not is_dir_exists(dst_dir[:-1]):
+                elif args.force and dst_dir != '/' and (not is_dir_exists(dst_dir[:-1]) or len(locate_file(dst_dir)) == 0):
                     cephfs.mkdirs(to_bytes(dst_dir), 0o777)
                 if not args.force and not is_dir_exists(dst_dir) and not os.path.isfile(root_src_dir) and root_dst_dir != '/':
                     args.force = True
@@ -517,12 +523,12 @@ class CephFSShell(Cmd):
                 files = reversed(sorted(set(dirwalk(cephfs.getcwd().decode('utf-8') + dir_path))))     
                 for i, path in enumerate(files):
                     path = re.sub('\/+', '/', path)
-                    if path[1:] != re.sub('\/+', '/', dir_path): 
+                    if re.sub('\/+', '/', path[1:]) != re.sub('\/+', '/', dir_path): 
                         try:
                             cephfs.rmdir(to_bytes(path))
                         except:
                             cephfs.unlink(to_bytes(path)) 
-            if not is_pattern and re.sub('\/+', '/', dir_path) != re.sub('\/+', '/', path):                      
+            if not args.parent and not is_pattern and re.sub('\/+', '/', dir_path) != re.sub('\/+', '/', path):                      
                 cephfs.rmdir(to_bytes(dir_path))
     
     def complete_rm(self, text, line, begidx, endidx):
@@ -705,7 +711,6 @@ class CephFSShell(Cmd):
         """
         Lists all files and folders in the current local directory
         """
-
         if len(args.paths) == 1 and args.paths[0] == '':
             args.paths.pop(0)
             args.paths.append(os.getcwd())
@@ -757,9 +762,9 @@ class CephFSShell(Cmd):
                 args.name = '/'+ args.name
         args.name = args.name.replace('*', '')
         if args.ignorecase:
-            locations = [i for i in sorted(set(dirwalk(cephfs.getcwd().decode('utf-8')))) if args.name.lower() in i.lower()]
+            locations = locate_file(args.name, False)
         else:
-            locations = [i for i in sorted(set(dirwalk(cephfs.getcwd().decode('utf-8')))) if args.name in i]
+            locations = locate_file(args.name)
         if args.count:
             self.poutput(len(locations))
         else:
@@ -812,9 +817,20 @@ class CephFSShell(Cmd):
  
 if __name__ == '__main__':
     config_file = ''
-    if sys.argv[1] == '-c':
-        config_file = sys.argv[2]
+    main_parser = argparse.ArgumentParser(description = '')
+    main_parser.add_argument('-c', '--config', action = 'store', help = 'Configuration file_path', type = str)
+    main_parser.add_argument('-b', '--batch', action = 'store', help = 'Batch File path.', type = str)
+    main_parser.add_argument('commands', help = 'Commands', nargs = '*')     
+    args = main_parser.parse_args()
+    if args.config:
+        config_file = args.config
+        sys.argv = [sys.argv[0]] + sys.argv[3:]
+    if args.batch:
+        sys.argv[1] = 'load ' + args.batch
+        sys.argv = sys.argv[:2]
+    if len(args.commands) > 0:
+        sys.argv.append(' '.join(args.commands))
+        sys.argv = [sys.argv[0]] + sys.argv[len(args.commands)+1:]
     setup_cephfs(config_file)
-    sys.argv = [sys.argv[0]]
     c = CephFSShell()
     c.cmdloop()

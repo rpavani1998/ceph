@@ -31,5 +31,10 @@ class TestCephFSShell(CephFSTestCase):
         """
 
         o = self._cephfs_shell("help")
-
         log.info("output:\n{}".format(o))
+
+    def test_ls(self):
+        # self._cephfs_shell("mkdir -p 755 test")
+        # self._cephfs_shell("mkdir -p 755 test1")
+        o = self._cephfs_shell("ls")
+        self.assertEqual(o, ".\/   ..\/" )
